@@ -25,19 +25,15 @@ async function run() {
     await client.connect();
 
     const productsCollection = client.db('TechnoEspial').collection('teShop');
-
-
+    const customersCollection = client.db('TechnoEspial').collection('teShopCustomer');
 
     /*
     =========================
         CREATE PRODUCT
     =========================
     */
-
     app.post('/products', async (req, res) => {
-
       try {
-
         const product = req.body;
 
         const result = await productsCollection.insertOne(product);
@@ -49,28 +45,20 @@ async function run() {
         });
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to add product"
         });
-
       }
-
     });
-
-
 
     /*
     =========================
         GET ALL PRODUCTS
     =========================
     */
-
     app.get('/products', async (req, res) => {
-
       try {
-
         const limit = parseInt(req.query.limit);
 
         let cursor = productsCollection.find();
@@ -84,101 +72,72 @@ async function run() {
         res.send(result);
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to fetch products"
         });
-
       }
-
     });
-
-
 
     /*
     =========================
         GET PRODUCTS BY CATEGORY
     =========================
     */
-
     app.get('/products/category/:category', async (req, res) => {
-
       try {
-
         const category = req.params.category;
 
-        const query = { category: category };
-
-        const result = await productsCollection.find(query).toArray();
+        const result = await productsCollection.find({ category }).toArray();
 
         res.send(result);
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to fetch category products"
         });
-
       }
-
     });
-
-
 
     /*
     =========================
         GET SINGLE PRODUCT
     =========================
     */
-
     app.get('/products/:id', async (req, res) => {
-
       try {
-
         const id = req.params.id;
 
-        const query = { _id: new ObjectId(id) };
-
-        const result = await productsCollection.findOne(query);
+        const result = await productsCollection.findOne({
+          _id: new ObjectId(id)
+        });
 
         res.send(result);
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to fetch product"
         });
-
       }
-
     });
-
-
 
     /*
     =========================
         UPDATE PRODUCT
     =========================
     */
-
     app.put('/products/:id', async (req, res) => {
-
       try {
-
         const id = req.params.id;
 
         const updatedProduct = req.body;
 
-        const filter = { _id: new ObjectId(id) };
-
-        const updateDoc = {
-          $set: updatedProduct
-        };
-
-        const result = await productsCollection.updateOne(filter, updateDoc);
+        const result = await productsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedProduct }
+        );
 
         res.send({
           success: true,
@@ -187,33 +146,25 @@ async function run() {
         });
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to update product"
         });
-
       }
-
     });
-
-
 
     /*
     =========================
         DELETE PRODUCT
     =========================
     */
-
     app.delete('/products/:id', async (req, res) => {
-
       try {
-
         const id = req.params.id;
 
-        const query = { _id: new ObjectId(id) };
-
-        const result = await productsCollection.deleteOne(query);
+        const result = await productsCollection.deleteOne({
+          _id: new ObjectId(id)
+        });
 
         res.send({
           success: true,
@@ -222,42 +173,70 @@ async function run() {
         });
 
       } catch (error) {
-
         res.status(500).send({
           success: false,
           message: "Failed to delete product"
         });
-
       }
-
     });
 
+    /*
+    =========================
+        CREATE ORDER (customersCollection)
+    =========================
+    */
+    app.post('/orders', async (req, res) => {
+      try {
 
+        if (!customersCollection) {
+          return res.status(500).send({ success: false, message: "DB not ready" });
+        }
 
-    console.log("MongoDB Connected Successfully");
+        const order = req.body;
 
-  } finally {
+        if (!order.phone || !order.address) {
+          return res.status(400).send({
+            success: false,
+            message: "Phone & Address required"
+          });
+        }
 
-  }
+        const result = await customersCollection.insertOne({
+          ...order,
+          createdAt: new Date()
+        });
+
+        res.send({
+          success: true,
+          message: "Order placed successfully",
+          insertedId: result.insertedId
+        });
+
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Failed to place order"
+        });
+      }
+    });
+
+    console.log("✅ MongoDB Connected Successfully");
+
+  } finally { }
 
 }
 
 run().catch(console.dir);
-
-
 
 /*
 =========================
       ROOT API
 =========================
 */
-
 app.get('/', (req, res) => {
   res.send('Techno Espial is running');
 });
 
-
-
 app.listen(port, () => {
-  console.log(`Techno Espial running on port ${port}`);
+  console.log(`🚀 Server running on port ${port}`);
 });
