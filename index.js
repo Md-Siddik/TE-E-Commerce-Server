@@ -182,15 +182,53 @@ async function run() {
 
     /*
     =========================
-        CREATE ORDER (customersCollection)
+        PRODUCTS API
     =========================
     */
-    app.post('/orders', async (req, res) => {
-      try {
 
-        if (!customersCollection) {
-          return res.status(500).send({ success: false, message: "DB not ready" });
-        }
+    app.post('/products', async (req, res) => {
+      const result = await productsCollection.insertOne(req.body);
+      res.send(result);
+    });
+
+    app.get('/products', async (req, res) => {
+      const result = await productsCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get('/products/:id', async (req, res) => {
+      const result = await productsCollection.findOne({
+        _id: new ObjectId(req.params.id)
+      });
+      res.send(result);
+    });
+
+    app.put('/products/:id', async (req, res) => {
+      const result = await productsCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: req.body }
+      );
+      res.send(result);
+    });
+
+    app.delete('/products/:id', async (req, res) => {
+      const result = await productsCollection.deleteOne({
+        _id: new ObjectId(req.params.id)
+      });
+      res.send(result);
+    });
+
+
+    /*
+    =========================
+        ORDERS API
+    =========================
+    */
+
+    // CREATE ORDER
+    app.post('/orders', async (req, res) => {
+
+      try {
 
         const order = req.body;
 
@@ -203,21 +241,145 @@ async function run() {
 
         const result = await customersCollection.insertOne({
           ...order,
+          status: "New",
           createdAt: new Date()
         });
 
         res.send({
           success: true,
-          message: "Order placed successfully",
           insertedId: result.insertedId
         });
 
+      } catch {
+        res.status(500).send({ success: false });
+      }
+
+    });
+
+
+    // GET ORDERS (FILTER)
+    app.get('/orders', async (req, res) => {
+
+      const status = req.query.status;
+
+      const query = status ? { status } : {};
+
+      const result = await customersCollection.find(query).toArray();
+
+      res.send(result);
+
+    });
+
+    //GET ORDERS
+    // GET SINGLE ORDER BY ID
+    app.get('/orders/:id', async (req, res) => {
+
+      try {
+
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({
+            success: false,
+            message: "Invalid ID"
+          });
+        }
+
+        const order = await customersCollection.findOne({
+          _id: new ObjectId(id)
+        });
+
+        if (!order) {
+          return res.status(404).send({
+            success: false,
+            message: "Order not found"
+          });
+        }
+
+        res.send(order);
+
       } catch (error) {
+
+        console.error("GET SINGLE ERROR:", error);
+
+        res.status(500).send({
+          success: false
+        });
+
+      }
+
+    });
+
+    // UPDATE ORDER STATUS
+    app.put('/orders/:id', async (req, res) => {
+
+      try {
+
+        const id = req.params.id;
+
+        // 🔥 CHECK VALID ID
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({
+            success: false,
+            message: "Invalid ID"
+          });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+
+        const updateDoc = {
+          $set: { status: "completed" }
+        };
+
+        const result = await customersCollection.updateOne(filter, updateDoc);
+
+        if (result.modifiedCount === 0) {
+          return res.send({
+            success: false,
+            message: "Order not found"
+          });
+        }
+
+        res.send({ success: true });
+
+      } catch (error) {
+
+        console.error("UPDATE ERROR:", error);
+
         res.status(500).send({
           success: false,
-          message: "Failed to place order"
+          error: error.message
         });
+
       }
+
+    });
+
+    //DELETE ORDER STATUS
+    app.delete('/orders/:id', async (req, res) => {
+
+      try {
+
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ success: false });
+        }
+
+        await customersCollection.deleteOne({
+          _id: new ObjectId(id)
+        });
+
+        res.send({ success: true });
+
+      } catch (error) {
+
+        console.error("DELETE ERROR:", error);
+
+        res.status(500).send({ success: false });
+
+      }
+
     });
 
     console.log("✅ MongoDB Connected Successfully");
