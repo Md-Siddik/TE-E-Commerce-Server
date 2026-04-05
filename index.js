@@ -123,6 +123,12 @@ async function run() {
       }
     });
 
+    app.get("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const product = await collection.findOne({ _id: new ObjectId(id) });
+      res.send(product);
+    });
+
     /*
     =========================
         UPDATE PRODUCT
