@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require("multer");
+const path = require("path");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
@@ -7,6 +9,7 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static('uploads'));
 
 const uri = "mongodb+srv://technoespial:GrEE56n8g3PGUD3c@cluster0.yscbe.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
@@ -17,6 +20,18 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({ storage });
 
 async function run() {
 
@@ -32,9 +47,16 @@ async function run() {
         CREATE PRODUCT
     =========================
     */
-    app.post('/products', async (req, res) => {
+    app.post('/products', upload.array('images', 6), async (req, res) => {
       try {
-        const product = req.body;
+        const body = req.body;
+
+        const imagePaths = req.files.map(file => `/uploads/${file.filename}`);
+
+        const product = {
+          ...body,
+          images: imagePaths
+        };
 
         const result = await productsCollection.insertOne(product);
 
@@ -45,6 +67,7 @@ async function run() {
         });
 
       } catch (error) {
+        console.log(error);
         res.status(500).send({
           success: false,
           message: "Failed to add product"
@@ -134,24 +157,63 @@ async function run() {
         UPDATE PRODUCT
     =========================
     */
-    app.put('/products/:id', async (req, res) => {
+    app.put('/products/:id', upload.array('images', 6), async (req, res) => {
       try {
         const id = req.params.id;
+        const body = req.body;
 
-        const updatedProduct = req.body;
+        // 🔥 imageMap safely parse
+        let imageMap = [];
+        try {
+          imageMap = JSON.parse(body.imageMap || "[]");
+        } catch {
+          imageMap = [];
+        }
 
+        const files = req.files || [];
+        let fileIndex = 0;
+
+        // 🔥 rebuild images properly
+        const finalImages = imageMap.map(item => {
+
+          if (item === null) return null;
+
+          if (item === "NEW_FILE") {
+            const file = files[fileIndex++];
+            if (!file) return null;
+            return `/uploads/${file.filename}`;
+          }
+
+          return item;
+        });
+
+        // 🔥 remove null values
+        const cleanImages = finalImages.filter(Boolean);
+
+        // 🔥 final update object
+        const updateDoc = {
+          ...body,
+          images: cleanImages
+        };
+
+        // 🔥 remove unnecessary fields
+        delete updateDoc.imageMap;
+
+        // 🔥 update DB
         const result = await productsCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: updatedProduct }
+          { $set: updateDoc }
         );
 
         res.send({
           success: true,
-          message: "Product Updated Successfully",
+          message: "Product updated successfully",
+          images: cleanImages,
           data: result
         });
 
       } catch (error) {
+        console.log("UPDATE ERROR:", error);
         res.status(500).send({
           success: false,
           message: "Failed to update product"
@@ -191,31 +253,6 @@ async function run() {
         PRODUCTS API
     =========================
     */
-
-    app.post('/products', async (req, res) => {
-      const result = await productsCollection.insertOne(req.body);
-      res.send(result);
-    });
-
-    app.get('/products', async (req, res) => {
-      const result = await productsCollection.find().toArray();
-      res.send(result);
-    });
-
-    app.get('/products/:id', async (req, res) => {
-      const result = await productsCollection.findOne({
-        _id: new ObjectId(req.params.id)
-      });
-      res.send(result);
-    });
-
-    app.put('/products/:id', async (req, res) => {
-      const result = await productsCollection.updateOne(
-        { _id: new ObjectId(req.params.id) },
-        { $set: req.body }
-      );
-      res.send(result);
-    });
 
     app.delete('/products/:id', async (req, res) => {
       const result = await productsCollection.deleteOne({
@@ -317,49 +354,6 @@ async function run() {
     });
 
     // UPDATE ORDER STATUS
-    app.put('/orders/:id', async (req, res) => {
-
-      try {
-
-        const id = req.params.id;
-
-        // 🔥 CHECK VALID ID
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({
-            success: false,
-            message: "Invalid ID"
-          });
-        }
-
-        const filter = { _id: new ObjectId(id) };
-
-        const updateDoc = {
-          $set: { status: "completed" }
-        };
-
-        const result = await customersCollection.updateOne(filter, updateDoc);
-
-        if (result.modifiedCount === 0) {
-          return res.send({
-            success: false,
-            message: "Order not found"
-          });
-        }
-
-        res.send({ success: true });
-
-      } catch (error) {
-
-        console.error("UPDATE ERROR:", error);
-
-        res.status(500).send({
-          success: false,
-          error: error.message
-        });
-
-      }
-
-    });
 
     //DELETE ORDER STATUS
     app.delete('/orders/:id', async (req, res) => {
